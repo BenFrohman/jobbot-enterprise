@@ -1,0 +1,41 @@
+# Copyright (c) 2026 Benjamin Stanley Frohman. All rights reserved. Proprietary.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+      - name: Import check
+        run: python -c "from jobbot_enterprise.main import create_app, Settings; create_app(Settings(db_path=':memory:')); print('ok')"
+      - name: Tests
+        run: python -m pytest -q tests
+      - name: Proprietary headers
+        run: |
+          for f in $(git ls-files '*.py' '*.js' '*.yml' '*.yaml' 'Dockerfile'); do
+            grep -q "Copyright (c) 2026 Benjamin Stanley Frohman. All rights reserved" "$f" || { echo "missing header: $f"; exit 1; }
+          done
+      - name: Secret hygiene
+        run: |
+          ! git grep -nE 'sk_live[_]|whsec_[A-Za-z0-9_-]{30,}|BEGIN (RSA|EC|OPENSSH) PRIVATE[ ]KEY|ghp_[A-Za-z0-9]{20,}' || \
+            (echo "Possible secret material found" && exit 1)
+      - name: Docker build
+        run: docker build -t jobbot-enterprise:ci .

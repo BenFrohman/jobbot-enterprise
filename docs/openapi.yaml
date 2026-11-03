@@ -1,0 +1,394 @@
+# Copyright (c) 2026 Benjamin Stanley Frohman. All rights reserved. Proprietary and confidential.
+openapi: 3.1.0
+info:
+  title: Jobbot Enterprise API
+  version: 0.1.0
+  description: |
+    Self-hosted hiring engine. Each operation carries `x-jobbot-status`: `implemented` (in v0.1)
+    or `planned` (specified, not built yet).
+  license:
+    name: Proprietary. All rights reserved.
+servers:
+  - url: https://jobs.internal.example.com
+    description: Your own deployment (data stays in your infrastructure)
+security:
+  - apiKey: []
+tags:
+  - {name: tenants}
+  - {name: auth}
+  - {name: postings}
+  - {name: intake}
+  - {name: candidates}
+  - {name: matching}
+  - {name: webhooks}
+  - {name: audit}
+  - {name: widget}
+paths:
+  /healthz:
+    get:
+      tags: [tenants]
+      security: []
+      x-jobbot-status: implemented
+      responses: {"200": {description: OK}}
+  /v1/tenants:
+    post:
+      tags: [tenants]
+      summary: Create a tenant (operator only); returns a bootstrap admin key once
+      security: [{operatorToken: []}]
+      x-jobbot-status: implemented
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "#/components/schemas/TenantIn"}}}}
+      responses:
+        "201": {description: Created, content: {application/json: {schema: {$ref: "#/components/schemas/TenantCreated"}}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+  /v1/tenant:
+    get:
+      tags: [tenants]
+      summary: The caller's tenant and role
+      x-jobbot-status: implemented
+      responses: {"200": {description: OK, content: {application/json: {schema: {$ref: "#/components/schemas/Tenant"}}}}}
+  /v1/api-keys:
+    get:
+      tags: [auth]
+      x-jobbot-status: implemented
+      responses: {"200": {description: Keys (hashes never returned)}}
+    post:
+      tags: [auth]
+      summary: Create an API key (secret shown once)
+      x-jobbot-status: implemented
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "#/components/schemas/KeyIn"}}}}
+      responses: {"201": {description: Created}, "403": {$ref: "#/components/responses/Forbidden"}}
+  /v1/api-keys/{key_id}:
+    delete:
+      tags: [auth]
+      x-jobbot-status: implemented
+      parameters: [{name: key_id, in: path, required: true, schema: {type: string}}]
+      responses: {"204": {description: Revoked}, "404": {$ref: "#/components/responses/NotFound"}}
+  /v1/auth/oidc/config:
+    put:
+      tags: [auth]
+      summary: Configure the customer IdP (issuer, audience, group-to-role mapping)
+      x-jobbot-status: planned
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "#/components/schemas/OidcConfig"}}}}
+      responses: {"200": {description: Saved}}
+  /v1/postings:
+    get:
+      tags: [postings]
+      x-jobbot-status: implemented
+      parameters: [{name: status, in: query, schema: {type: string, enum: [draft, open, closed]}}]
+      responses: {"200": {description: OK, content: {application/json: {schema: {type: array, items: {$ref: "#/components/schemas/Posting"}}}}}}
+    post:
+      tags: [postings]
+      x-jobbot-status: implemented
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "#/components/schemas/PostingIn"}}}}
+      responses: {"201": {description: Created, content: {application/json: {schema: {$ref: "#/components/schemas/Posting"}}}}}
+  /v1/postings/{posting_id}:
+    parameters: [{$ref: "#/components/parameters/PostingId"}]
+    get:
+      tags: [postings]
+      x-jobbot-status: implemented
+      responses: {"200": {description: OK}, "404": {$ref: "#/components/responses/NotFound"}}
+    patch:
+      tags: [postings]
+      x-jobbot-status: implemented
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "#/components/schemas/PostingIn"}}}}
+      responses: {"200": {description: Updated}}
+    delete:
+      tags: [postings]
+      summary: Close a posting (kept for audit)
+      x-jobbot-status: implemented
+      responses: {"204": {description: Closed}}
+  /v1/postings/{posting_id}/applications:
+    parameters: [{$ref: "#/components/parameters/PostingId"}]
+    get:
+      tags: [intake]
+      x-jobbot-status: implemented
+      responses: {"200": {description: Applications for the posting}}
+  /v1/public/postings:
+    get:
+      tags: [widget]
+      summary: Open roles (publishable widget key)
+      x-jobbot-status: implemented
+      responses: {"200": {description: OK}}
+  /v1/public/applications:
+    post:
+      tags: [intake]
+      summary: Submit an application with a consent grant
+      x-jobbot-status: implemented
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "#/components/schemas/ApplyIn"}}}}
+      responses:
+        "201": {description: Created, content: {application/json: {schema: {$ref: "#/components/schemas/ApplyOut"}}}}
+        "409": {description: Posting is not open}
+        "422": {description: Unknown consent field}
+        "429": {description: Rate limited}
+  /v1/public/widget/config:
+    get:
+      tags: [widget]
+      x-jobbot-status: implemented
+      responses: {"200": {description: OK, content: {application/json: {schema: {$ref: "#/components/schemas/WidgetConfig"}}}}}
+  /v1/widget/config:
+    get:
+      tags: [widget]
+      x-jobbot-status: implemented
+      responses: {"200": {description: OK}}
+    put:
+      tags: [widget]
+      x-jobbot-status: implemented
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "#/components/schemas/WidgetConfig"}}}}
+      responses: {"200": {description: Saved}}
+  /v1/candidates:
+    get:
+      tags: [candidates]
+      summary: Consent-scoped candidate views
+      x-jobbot-status: implemented
+      parameters: [{name: posting_id, in: query, schema: {type: string}}]
+      responses: {"200": {description: OK, content: {application/json: {schema: {type: array, items: {$ref: "#/components/schemas/CandidateView"}}}}}}
+  /v1/candidates/{candidate_id}:
+    get:
+      tags: [candidates]
+      x-jobbot-status: implemented
+      parameters: [{name: candidate_id, in: path, required: true, schema: {type: string}}]
+      responses: {"200": {description: OK, content: {application/json: {schema: {$ref: "#/components/schemas/CandidateView"}}}}, "404": {$ref: "#/components/responses/NotFound"}}
+  /v1/candidate/me:
+    get:
+      tags: [candidates]
+      summary: Candidate reads their own full record
+      security: [{candidateToken: []}]
+      x-jobbot-status: implemented
+      responses: {"200": {description: OK}}
+    delete:
+      tags: [candidates]
+      summary: Candidate erases their data
+      security: [{candidateToken: []}]
+      x-jobbot-status: implemented
+      responses: {"204": {description: Erased}}
+  /v1/candidate/me/consent:
+    put:
+      tags: [candidates]
+      summary: Candidate changes which fields the company may see and score
+      security: [{candidateToken: []}]
+      x-jobbot-status: implemented
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "#/components/schemas/ConsentIn"}}}}
+      responses: {"200": {description: Updated}}
+  /v1/candidate/me/matches:
+    get:
+      tags: [matching]
+      summary: Open roles at this company ranked for the candidate, with explanations
+      security: [{candidateToken: []}]
+      x-jobbot-status: implemented
+      responses: {"200": {description: OK}}
+  /v1/postings/{posting_id}/match:
+    parameters: [{$ref: "#/components/parameters/PostingId"}]
+    post:
+      tags: [matching]
+      summary: Rank applicants using only consented fields; emits match.ready
+      x-jobbot-status: implemented
+      requestBody: {content: {application/json: {schema: {$ref: "#/components/schemas/MatchIn"}}}}
+      responses: {"200": {description: OK, content: {application/json: {schema: {$ref: "#/components/schemas/MatchOut"}}}}}
+  /v1/postings/{posting_id}/feedback:
+    parameters: [{$ref: "#/components/parameters/PostingId"}]
+    post:
+      tags: [matching]
+      summary: Advance / reject / clear; tunes later rankings
+      x-jobbot-status: implemented
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "#/components/schemas/FeedbackIn"}}}}
+      responses: {"200": {description: Recorded}}
+  /v1/webhooks:
+    get:
+      tags: [webhooks]
+      x-jobbot-status: implemented
+      responses: {"200": {description: OK (secrets never returned)}}
+    post:
+      tags: [webhooks]
+      x-jobbot-status: implemented
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "#/components/schemas/WebhookIn"}}}}
+      responses: {"201": {description: Created; secret shown once}}
+  /v1/webhooks/{webhook_id}:
+    delete:
+      tags: [webhooks]
+      x-jobbot-status: implemented
+      parameters: [{name: webhook_id, in: path, required: true, schema: {type: string}}]
+      responses: {"204": {description: Deleted}}
+  /v1/webhooks/deliveries:
+    get:
+      tags: [webhooks]
+      x-jobbot-status: implemented
+      responses: {"200": {description: Recent deliveries with status and attempts}}
+  /v1/audit/export:
+    get:
+      tags: [audit]
+      x-jobbot-status: implemented
+      parameters:
+        - {name: since, in: query, schema: {type: integer, default: 0}}
+        - {name: format, in: query, schema: {type: string, enum: [json, jsonl], default: json}}
+      responses: {"200": {description: Hash-chained entries; json includes chain_valid}}
+  /v1/audit/bias-report:
+    get:
+      tags: [audit]
+      summary: Selection rates and impact ratios by self-reported category (for LL144-style audits)
+      x-jobbot-status: planned
+      responses: {"200": {description: OK}}
+  /v1/retention/run:
+    post:
+      tags: [candidates]
+      summary: Erase candidate profiles older than the tenant retention period
+      x-jobbot-status: implemented
+      responses: {"200": {description: Count erased}}
+webhooks:
+  application.created:
+    post:
+      x-jobbot-status: implemented
+      parameters: [{$ref: "#/components/parameters/Signature"}]
+      requestBody: {content: {application/json: {schema: {$ref: "#/components/schemas/Event"}}}}
+      responses: {"2XX": {description: Acknowledged}}
+  match.ready:
+    post:
+      x-jobbot-status: implemented
+      parameters: [{$ref: "#/components/parameters/Signature"}]
+      requestBody: {content: {application/json: {schema: {$ref: "#/components/schemas/Event"}}}}
+      responses: {"2XX": {description: Acknowledged}}
+  consent.updated:
+    post:
+      x-jobbot-status: implemented
+      parameters: [{$ref: "#/components/parameters/Signature"}]
+      requestBody: {content: {application/json: {schema: {$ref: "#/components/schemas/Event"}}}}
+      responses: {"2XX": {description: Acknowledged}}
+components:
+  securitySchemes:
+    apiKey: {type: http, scheme: bearer, description: "Tenant API key (jbk_… staff, jbp_… publishable widget)"}
+    operatorToken: {type: apiKey, in: header, name: X-Operator-Token}
+    candidateToken: {type: apiKey, in: header, name: X-Candidate-Token}
+    oidc: {type: openIdConnect, openIdConnectUrl: "https://idp.example.com/.well-known/openid-configuration", description: planned}
+  parameters:
+    PostingId: {name: posting_id, in: path, required: true, schema: {type: string}}
+    Signature:
+      name: Jobbot-Signature
+      in: header
+      required: true
+      description: "t=<unix>,v1=hex(HMAC-SHA256(secret, '<t>.' + raw_body)); reject if |now - t| > 300s"
+      schema: {type: string}
+  responses:
+    Unauthorized: {description: Missing or invalid credentials}
+    Forbidden: {description: Role lacks scope}
+    NotFound: {description: Not found in this tenant}
+  schemas:
+    ConsentField:
+      type: string
+      enum: [name, email, phone, location, links, skills, experience, values, causes, desired_impact, comp_expectation, resume_text]
+    TenantIn:
+      type: object
+      required: [name]
+      properties:
+        name: {type: string}
+        region: {type: string, default: us}
+        retention_days: {type: integer, minimum: 1, maximum: 3650, default: 365}
+    Tenant:
+      type: object
+      properties: {id: {type: string}, name: {type: string}, region: {type: string}, retention_days: {type: integer}, role: {type: string}}
+    TenantCreated:
+      allOf: [{$ref: "#/components/schemas/Tenant"}, {type: object, properties: {admin_key: {type: string}}}]
+    KeyIn:
+      type: object
+      required: [name, role]
+      properties: {name: {type: string}, role: {type: string, enum: [admin, recruiter, auditor, widget]}}
+    OidcConfig:
+      type: object
+      properties:
+        issuer: {type: string, format: uri}
+        audience: {type: string}
+        role_claim: {type: string, default: groups}
+        role_map: {type: object, additionalProperties: {type: string, enum: [admin, recruiter, auditor]}}
+    PostingIn:
+      type: object
+      required: [title]
+      properties:
+        title: {type: string}
+        description: {type: string}
+        location: {type: string}
+        remote: {type: boolean}
+        team: {type: string}
+        status: {type: string, enum: [draft, open, closed]}
+        comp_min: {type: [integer, "null"]}
+        comp_max: {type: [integer, "null"]}
+    Posting:
+      allOf: [{$ref: "#/components/schemas/PostingIn"}, {type: object, properties: {id: {type: string}, created_at: {type: number}, updated_at: {type: number}}}]
+    Profile:
+      type: object
+      properties:
+        name: {type: string}
+        email: {type: string}
+        phone: {type: string}
+        location: {type: string}
+        links: {type: string}
+        skills: {type: string}
+        experience: {type: string}
+        values: {type: string}
+        causes: {type: string}
+        desired_impact: {type: string}
+        comp_expectation: {type: [integer, "null"]}
+        resume_text: {type: string}
+    ApplyIn:
+      type: object
+      required: [posting_id, profile]
+      properties:
+        posting_id: {type: string}
+        profile: {$ref: "#/components/schemas/Profile"}
+        consent_fields: {type: array, items: {$ref: "#/components/schemas/ConsentField"}}
+    ApplyOut:
+      type: object
+      properties:
+        application_id: {type: string}
+        candidate_id: {type: string}
+        candidate_token: {type: string, description: Shown once; lets the candidate manage consent}
+        consented_fields: {type: array, items: {$ref: "#/components/schemas/ConsentField"}}
+    ConsentIn:
+      type: object
+      required: [fields]
+      properties: {fields: {type: array, items: {$ref: "#/components/schemas/ConsentField"}}}
+    CandidateView:
+      type: object
+      properties:
+        id: {type: string}
+        consented_fields: {type: array, items: {$ref: "#/components/schemas/ConsentField"}}
+        profile: {type: object, description: Only granted fields; withheld fields are omitted}
+    MatchIn:
+      type: object
+      properties: {limit: {type: integer, default: 20}, remote_ok: {type: boolean, default: true}, comp_ceiling: {type: [integer, "null"]}}
+    MatchOut:
+      type: object
+      properties:
+        posting_id: {type: string}
+        engine: {type: string}
+        scored_fields: {type: array, items: {type: string}}
+        matches:
+          type: array
+          items:
+            type: object
+            properties:
+              candidate_id: {type: string}
+              score: {type: number, description: 0-100}
+              breakdown: {type: object, properties: {skills: {type: number}, mission: {type: number}, preferences: {type: number}, feedback: {type: number}}}
+              why: {type: string}
+              reasons: {type: array, items: {type: string}}
+              feedback: {type: [string, "null"]}
+    FeedbackIn:
+      type: object
+      required: [candidate_id, action]
+      properties: {candidate_id: {type: string}, action: {type: string, enum: [advance, reject, clear]}}
+    WebhookIn:
+      type: object
+      required: [url, events]
+      properties:
+        url: {type: string, format: uri}
+        events: {type: array, items: {type: string, enum: [application.created, match.ready, consent.updated]}}
+    WidgetConfig:
+      type: object
+      properties:
+        company_name: {type: string}
+        accent_color: {type: string, pattern: "^#[0-9a-fA-F]{6}$"}
+        intro: {type: string}
+        ask_fields: {type: array, items: {$ref: "#/components/schemas/ConsentField"}}
+        default_consent: {type: array, items: {$ref: "#/components/schemas/ConsentField"}}
+        allowed_origins: {type: array, items: {type: string}}
+    Event:
+      type: object
+      properties: {id: {type: string}, type: {type: string}, tenant_id: {type: string}, created: {type: integer}, data: {type: object}}

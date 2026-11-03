@@ -1,0 +1,18 @@
+# Copyright (c) 2026 Benjamin Stanley Frohman. All rights reserved. Proprietary.
+# Self-hosted Jobbot engine: runs entirely in your infrastructure; data stays in the jobbot-data volume.
+services:
+  jobbot:
+    build: .
+    image: jobbot-enterprise:0.1.0
+    env_file: .env
+    ports:
+      - "127.0.0.1:8080:8080"  # put your TLS-terminating gateway / ingress in front
+    volumes:
+      - jobbot-data:/data
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    restart: unless-stopped
+volumes:
+  jobbot-data:

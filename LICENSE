@@ -1,0 +1,19 @@
+Copyright (c) 2026 Benjamin Stanley Frohman. All rights reserved.
+
+PROPRIETARY AND CONFIDENTIAL
+
+This software and its documentation (the "Software") are the proprietary
+property of Benjamin Stanley Frohman. No license is granted. You may not use,
+copy, modify, merge, publish, distribute, sublicense, sell, host, deploy, or
+create derivative works of the Software, in whole or in part, without the
+prior written permission of Benjamin Stanley Frohman.
+
+Unauthorized use, copying or distribution is strictly prohibited.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM,
+DAMAGES OR OTHER LIABILITY ARISING FROM OR IN CONNECTION WITH THE SOFTWARE.
+
+Third-party components remain under their own licenses. The open-source
+Overemployed-Job Bot (Apache-2.0, github.com/BenFrohman/overemployed-job-bot)
+is a separate project and is not covered by this license.
