@@ -1,10 +1,10 @@
-/* Copyright (c) 2026 Benjamin Stanley Frohman. All rights reserved.
- * Proprietary and confidential. No use, copying or distribution without written permission.
+/* SPDX-License-Identifier: Apache-2.0
+ * Copyright 2026 Benjamin Stanley Frohman
  *
  * Jobbot careers widget. Embed:
  *   <div id="jobbot"></div>
- *   <script src="https://jobs.internal.example.com/widget.js"
- *           data-api="https://jobs.internal.example.com" data-key="jbp_..." data-target="#jobbot"></script>
+ *   <script src="https://jobs.example.com/widget.js"
+ *           data-api="https://jobs.example.com" data-key="jbp_..." data-target="#jobbot"></script>
  * Uses a publishable widget key (role "widget"), which can only list open roles and submit applications.
  */
 (function () {

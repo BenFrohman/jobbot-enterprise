@@ -1,5 +1,5 @@
-# Copyright (c) 2026 Benjamin Stanley Frohman. All rights reserved.
-# Proprietary and confidential. No use, copying or distribution without written permission.
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Benjamin Stanley Frohman
 """Local, explainable matching (BM25 + mission + preferences). Same approach as the open-source
 Overemployed-Job Bot matcher, re-implemented here; no external AI service, no data leaves the host.
 A customer may plug in their own embedding model via `Embedder` (e.g. on their own GPUs)."""

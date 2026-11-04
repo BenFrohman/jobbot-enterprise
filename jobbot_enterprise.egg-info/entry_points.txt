@@ -1,0 +1,2 @@
+[console_scripts]
+jobbot-enterprise = jobbot_enterprise.cli:main

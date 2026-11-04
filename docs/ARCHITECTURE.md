@@ -1,4 +1,4 @@
-<!-- Copyright (c) 2026 Benjamin Stanley Frohman. All rights reserved. Proprietary and confidential. -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
 # Jobbot Enterprise: architecture
 
 Jobbot Enterprise is a packaged hiring engine (backend plus embeddable frontend) that a company, such as a frontier AI lab, deploys **inside its own infrastructure**. The company keeps every candidate record. Jobbot supplies the engine, upgrades and operational know-how, so the company doesn't have to build matching, consent, intake and audit itself.
@@ -114,3 +114,8 @@ A candidate uses their token to read their own full record, narrow or widen what
 - **NYC Local Law 144 (AEDTs)**: if a ranking "substantially assists" hiring decisions for NYC roles, an independent bias audit, a public summary and candidate notice may be required. The consent screen and audit export are meant to support that.
 - **EU AI Act**: AI systems used for recruitment are listed as high-risk. Relevant duties include risk management, data governance, logging, transparency to candidates, human oversight, and accuracy and robustness documentation. Self-hosting, explanations and the audit log help, but the deployer still has obligations.
 - **GDPR / CCPA**: covered by data minimization through consent, access (`/candidate/me`), erasure, retention limits and in-region deployment. A DPA between the customer and Jobbot covers support access only.
+
+## 8. Plugins (v0.2)
+
+Sources, matchers, notification sinks and ATS exports are plugins discovered from the
+`jobbot_enterprise.plugins` entry-point group, enabled and configured per tenant. See [PLUGINS.md](PLUGINS.md).

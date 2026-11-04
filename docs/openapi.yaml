@@ -1,15 +1,17 @@
-# Copyright (c) 2026 Benjamin Stanley Frohman. All rights reserved. Proprietary and confidential.
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Benjamin Stanley Frohman
 openapi: 3.1.0
 info:
   title: Jobbot Enterprise API
-  version: 0.1.0
+  version: 0.2.0
   description: |
-    Self-hosted hiring engine. Each operation carries `x-jobbot-status`: `implemented` (in v0.1)
+    Self-hosted hiring engine. Each operation carries `x-jobbot-status`: `implemented` (in v0.2)
     or `planned` (specified, not built yet).
   license:
-    name: Proprietary. All rights reserved.
+    name: Apache-2.0
+    identifier: Apache-2.0
 servers:
-  - url: https://jobs.internal.example.com
+  - url: https://jobs.example.com
     description: Your own deployment (data stays in your infrastructure)
 security:
   - apiKey: []
@@ -23,6 +25,7 @@ tags:
   - {name: webhooks}
   - {name: audit}
   - {name: widget}
+  - {name: plugins}
 paths:
   /healthz:
     get:
@@ -233,6 +236,36 @@ paths:
       summary: Erase candidate profiles older than the tenant retention period
       x-jobbot-status: implemented
       responses: {"200": {description: Count erased}}
+  /v1/plugins:
+    get:
+      tags: [plugins]
+      summary: List installed plugins (built-in and entry-point) with this tenant's enabled state
+      x-jobbot-status: implemented
+      responses: {"200": {description: "{plugins: [...], load_errors: {...}}"}}
+  /v1/plugins/{name}:
+    parameters: [{name: name, in: path, required: true, schema: {type: string}}]
+    put:
+      tags: [plugins]
+      summary: Enable/disable a plugin for this tenant and store its config (admin)
+      x-jobbot-status: implemented
+      requestBody:
+        content: {application/json: {schema: {type: object, required: [enabled], properties: {enabled: {type: boolean}, config: {type: object}}}}}
+      responses: {"200": {description: OK}, "404": {$ref: "#/components/responses/NotFound"}}
+  /v1/plugins/{name}/import:
+    parameters: [{name: name, in: path, required: true, schema: {type: string}}]
+    post:
+      tags: [plugins]
+      summary: Run a source plugin; new roles are created as draft postings (deduplicated by external id)
+      x-jobbot-status: implemented
+      responses: {"200": {description: "{created, skipped}"}, "409": {description: Plugin disabled}, "502": {description: Source failed}}
+  /v1/postings/{posting_id}/export:
+    parameters: [{$ref: "#/components/parameters/PostingId"}]
+    get:
+      tags: [plugins]
+      summary: Export applications (consented fields only) through an export plugin (csv, jsonl, …)
+      x-jobbot-status: implemented
+      parameters: [{name: plugin, in: query, schema: {type: string, default: csv}}]
+      responses: {"200": {description: File body in the plugin's media type}}
 webhooks:
   application.created:
     post:
@@ -352,7 +385,7 @@ components:
         profile: {type: object, description: Only granted fields; withheld fields are omitted}
     MatchIn:
       type: object
-      properties: {limit: {type: integer, default: 20}, remote_ok: {type: boolean, default: true}, comp_ceiling: {type: [integer, "null"]}}
+      properties: {limit: {type: integer, default: 20}, engine: {type: string, default: bm25, description: "matcher plugin name"}, remote_ok: {type: boolean, default: true}, comp_ceiling: {type: [integer, "null"]}}
     MatchOut:
       type: object
       properties:

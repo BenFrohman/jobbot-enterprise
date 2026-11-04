@@ -2,9 +2,9 @@
 
 [![CI](https://github.com/BenFrohman/jobbot-enterprise/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/BenFrohman/jobbot-enterprise/actions/workflows/ci.yml?query=branch%3Amain)
 
-**Proprietary and confidential.** Copyright (c) 2026 Benjamin Stanley Frohman. All rights reserved. No use, copying or distribution without written permission. See [LICENSE](LICENSE).
+Free and open source under the [Apache License 2.0](LICENSE). Anyone can use, modify, self-host and redistribute it, including commercially. Copyright 2026 Benjamin Stanley Frohman.
 
-This repository is **separate from** the open-source [Overemployed-Job Bot](https://github.com/BenFrohman/overemployed-job-bot) (Apache-2.0). Jobbot Enterprise may use that project as a library, but no enterprise code goes into the public repository. The matcher here follows the same local, explainable approach and was re-implemented for this codebase.
+Sister project of the open-source [Overemployed-Job Bot](https://github.com/BenFrohman/overemployed-job-bot): that one helps people find work; this one is the self-hosted engine a company runs to hire.
 
 ## What it is
 
@@ -16,20 +16,30 @@ Companies, including frontier AI labs, use Jobbot to offer their own hiring expe
 - **Explainable matching**: local BM25 skills fit, mission fit and preferences, with recruiter feedback (advance/reject) tuning later rankings. Each result has a score breakdown and a plain-language "why". It runs on CPU by default, and customers can plug in their own embedding model or GPUs.
 - **Signed webhooks** (`application.created`, `match.ready`, `consent.updated`): HMAC-SHA256, replay window, retries, delivery log
 - **Hash-chained audit log** with JSON/JSONL export and tamper detection; per-tenant retention
+- **Plugins**: job sources, matchers, notification sinks and ATS exports, loaded from Python entry points and enabled per tenant (see [docs/PLUGINS.md](docs/PLUGINS.md))
 - **Self-hosting**: Dockerfile and docker-compose (non-root, read-only filesystem, no capabilities)
 
 Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/openapi.yaml](docs/openapi.yaml) (OpenAPI 3.1; every operation is marked `implemented` or `planned`).
 
-## Implemented in v0.1 vs specified only
+## Implemented in v0.2 vs specified only
 
-| Area | v0.1 | Planned |
+| Area | v0.2 | Planned |
 |------|------|---------|
 | Auth | API keys + roles, operator token | OIDC/SSO with group-to-role mapping |
 | Data | SQLite on a customer volume | Postgres, envelope encryption with customer KMS keys |
-| Matching | BM25 + mission + prefs + feedback, `Embedder` interface | Ready-made GPU / embedding adapters |
+| Matching | BM25 + mission + prefs + feedback, TF-IDF, matcher plugins | Ready-made GPU / embedding adapters |
 | Console | Full REST API | Admin web UI |
 | Compliance | Consent, audit, retention, erasure | Bias-audit report endpoint |
-| Ops | Docker / compose | Helm chart, managed control plane (anonymous metrics only) |
+| Integrations | Greenhouse/Lever import, Slack + signed webhook sinks, CSV/JSONL export | More ATS connectors |
+| Ops | pip package, Docker / compose, GHCR image | Helm chart, managed control plane (anonymous metrics only) |
+
+## Install
+
+```bash
+pip install https://github.com/BenFrohman/jobbot-enterprise/releases/download/v0.2.0/jobbot_enterprise-0.2.0-py3-none-any.whl
+JOBBOT_OPERATOR_TOKEN=change-me jobbot-enterprise --port 8080
+# or: docker run -p 8080:8080 -e JOBBOT_OPERATOR_TOKEN=change-me ghcr.io/benfrohman/jobbot-enterprise:0.2.0
+```
 
 ## Run it yourself
 
@@ -44,7 +54,7 @@ Embed the careers board with a publishable key (`role: widget`):
 
 ```html
 <div id="jobbot"></div>
-<script src="https://jobs.internal.example.com/widget.js" data-api="https://jobs.internal.example.com"
+<script src="https://jobs.example.com/widget.js" data-api="https://jobs.example.com"
         data-key="jbp_..." data-target="#jobbot"></script>
 ```
 
@@ -53,8 +63,12 @@ Verify webhooks: `jobbot_enterprise.webhooks.verify(secret, raw_body, request.he
 ## Development
 
 ```bash
-pip install -r requirements.txt -r requirements-dev.txt
+pip install -e ".[dev]"
 python -m pytest -q tests
 ```
 
 The tests cover tenant isolation, consent enforcement in views and matching, webhook signing, retries and replay protection, audit-chain tamper detection, and drift between the spec and the code.
+
+## License
+
+Apache-2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE). Contributions are accepted under the same license.

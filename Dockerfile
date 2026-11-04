@@ -1,10 +1,14 @@
-# Copyright (c) 2026 Benjamin Stanley Frohman. All rights reserved. Proprietary.
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Benjamin Stanley Frohman
 FROM python:3.12-slim
+LABEL org.opencontainers.image.source="https://github.com/BenFrohman/jobbot-enterprise" \
+      org.opencontainers.image.licenses="Apache-2.0" \
+      org.opencontainers.image.description="Open-source self-hosted hiring engine"
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 JOBBOT_DB_PATH=/data/jobbot.db
 WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY pyproject.toml README.md LICENSE NOTICE ./
 COPY jobbot_enterprise ./jobbot_enterprise
+RUN pip install --no-cache-dir . && rm -rf /app/*
 RUN useradd --uid 10001 --create-home jobbot && mkdir -p /data && chown jobbot /data
 USER jobbot
 VOLUME ["/data"]

@@ -1,5 +1,5 @@
-# Copyright (c) 2026 Benjamin Stanley Frohman. All rights reserved.
-# Proprietary and confidential. No use, copying or distribution without written permission.
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Benjamin Stanley Frohman
 """Candidate consent: the candidate decides which profile fields a company may see or score."""
 from __future__ import annotations
 

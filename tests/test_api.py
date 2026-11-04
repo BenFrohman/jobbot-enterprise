@@ -1,5 +1,5 @@
-# Copyright (c) 2026 Benjamin Stanley Frohman. All rights reserved.
-# Proprietary and confidential. No use, copying or distribution without written permission.
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Benjamin Stanley Frohman
 from conftest import H, OP
 
 
@@ -169,6 +169,6 @@ def test_audit_chain_widget_config_and_postings(client, tenant):
     # tampering breaks the chain
     client.app.state.db.x("UPDATE audit_log SET actor='someone-else' WHERE seq=(SELECT MIN(seq) FROM audit_log)")
     assert client.get("/v1/audit/export", headers=k).json()["chain_valid"] is False
-    assert client.get("/widget.js").text.startswith("/* Copyright (c) 2026 Benjamin Stanley Frohman")
+    assert client.get("/widget.js").text.startswith("/* SPDX-License-Identifier: Apache-2.0")
     assert client.post("/v1/retention/run", headers=k).json()["erased"] == 0
     assert OP

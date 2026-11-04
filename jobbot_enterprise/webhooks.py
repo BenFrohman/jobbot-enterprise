@@ -1,5 +1,5 @@
-# Copyright (c) 2026 Benjamin Stanley Frohman. All rights reserved.
-# Proprietary and confidential. No use, copying or distribution without written permission.
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Benjamin Stanley Frohman
 """Outbound webhooks signed with HMAC-SHA256 (Stripe-style `t=...,v1=...`)."""
 from __future__ import annotations
 

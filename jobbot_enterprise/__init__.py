@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Benjamin Stanley Frohman. All rights reserved.
-# Proprietary and confidential. No use, copying or distribution without written permission.
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Benjamin Stanley Frohman
 """Jobbot Enterprise: a self-hosted, tenant-isolated hiring engine."""
-__version__ = "0.1.0"
+__version__ = "0.2.0"

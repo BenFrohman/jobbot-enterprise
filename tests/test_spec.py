@@ -1,5 +1,5 @@
-# Copyright (c) 2026 Benjamin Stanley Frohman. All rights reserved.
-# Proprietary and confidential. No use, copying or distribution without written permission.
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Benjamin Stanley Frohman
 """The spec and the service must not drift: every implemented route is in docs/openapi.yaml."""
 from pathlib import Path
 

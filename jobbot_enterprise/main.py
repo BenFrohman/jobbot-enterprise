@@ -1,5 +1,5 @@
-# Copyright (c) 2026 Benjamin Stanley Frohman. All rights reserved.
-# Proprietary and confidential. No use, copying or distribution without written permission.
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Benjamin Stanley Frohman
 """FastAPI service: the Jobbot Enterprise hiring engine (see docs/openapi.yaml)."""
 from __future__ import annotations
 
@@ -16,10 +16,10 @@ from urllib.parse import urlparse
 import httpx
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.responses import FileResponse, PlainTextResponse, Response
 from pydantic import BaseModel, Field
 
-from . import __version__, audit, consent, webhooks
+from . import __version__, audit, consent, plugins as plug, webhooks
 from .auth import ROLES, Principal, hash_token, new_id, new_key, principal, require_operator
 from .db import DB, dumps, now
 from .matching import Doc, rank, tokenize
@@ -35,6 +35,8 @@ class Settings:
                                     os.getenv("JOBBOT_CORS_ORIGINS", "").split(",") if o.strip()])
     allow_http_webhooks: bool = field(default_factory=lambda: os.getenv("JOBBOT_ALLOW_HTTP_WEBHOOKS") == "1")
     public_rate_limit: int = 30  # per minute per key+IP on public endpoints
+    # Entry-point plugin discovery: "1" (default) loads all installed, "0" none, or a comma list of names.
+    plugins: str = field(default_factory=lambda: os.getenv("JOBBOT_PLUGINS", "1"))
 
 
 class RateLimiter:
@@ -114,6 +116,7 @@ class ConsentIn(BaseModel):
 
 class MatchIn(BaseModel):
     limit: int = Field(default=20, ge=1, le=200)
+    engine: str = Field(default="bm25", max_length=64)
     remote_ok: bool = True
     comp_ceiling: Optional[int] = Field(default=None, ge=0)
 
@@ -137,6 +140,11 @@ class WidgetConfig(BaseModel):
     allowed_origins: list[str] = Field(default_factory=list, max_length=20)
 
 
+class PluginConfigIn(BaseModel):
+    enabled: bool
+    config: dict = Field(default_factory=dict)
+
+
 def _posting(r) -> dict:
     return {"id": r["id"], "title": r["title"], "description": r["description"], "location": r["location"],
             "remote": bool(r["remote"]), "team": r["team"], "status": r["status"], "comp_min": r["comp_min"],
@@ -144,11 +152,16 @@ def _posting(r) -> dict:
 
 
 def create_app(settings: Settings | None = None, http: httpx.Client | None = None,
-               webhook_backoff: float = 1.0) -> FastAPI:
+               webhook_backoff: float = 1.0, extra_plugins: list | None = None) -> FastAPI:
     settings = settings or Settings()
+    sel = settings.plugins.strip()
+    registry = plug.load(extra=extra_plugins, discover=sel != "0",
+                         allow=None if sel in ("1", "") else {x.strip() for x in sel.split(",") if x.strip()})
     app = FastAPI(title="Jobbot Enterprise", version=__version__,
-                  description="Proprietary. Copyright (c) 2026 Benjamin Stanley Frohman. All rights reserved.")
+                  description="Open-source self-hosted hiring engine (Apache-2.0).",
+                  license_info={"name": "Apache-2.0", "identifier": "Apache-2.0"})
     app.state.settings = settings
+    app.state.plugins = registry
     app.state.db = db = DB(settings.db_path)
     app.state.http = http or httpx.Client(follow_redirects=False)
     limiter = RateLimiter()
@@ -156,9 +169,36 @@ def create_app(settings: Settings | None = None, http: httpx.Client | None = Non
         app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_methods=["GET", "POST"],
                            allow_headers=["Authorization", "Content-Type", "X-Api-Key", "X-Candidate-Token"])
 
+    def plugin_state(tid: str, name: str) -> tuple[bool, dict]:
+        p = registry.get(name)
+        r = db.one("SELECT enabled, config FROM plugin_config WHERE tenant_id=? AND plugin=?", tid, name)
+        if r is None:
+            return bool(p and getattr(p, "default_enabled", False)), {}
+        return bool(r["enabled"]), json.loads(r["config"])
+
+    def enabled_plugin(tid: str, name: str, kind: str):
+        p = registry.get(name, kind)
+        if p is None:
+            raise HTTPException(404, f"No {kind} plugin named '{name}'")
+        on, cfg = plugin_state(tid, name)
+        if not on:
+            raise HTTPException(409, f"Plugin '{name}' is disabled for this tenant")
+        return p, cfg
+
     def emit(tenant_id: str, event: str, data: dict) -> None:
         def run():
             webhooks.emit(db, app.state.http, tenant_id, event, data, sleep=lambda a: time.sleep(webhook_backoff * a))
+            payload = {"type": event, "tenant_id": tenant_id, "created": int(now()), "data": data}
+            for s in registry.of_kind("sink"):
+                on, cfg = plugin_state(tenant_id, s.name)
+                if not on or (cfg.get("events") and event not in cfg["events"]):
+                    continue
+                try:
+                    s.deliver(event, payload, cfg, app.state.http)
+                    status = "ok"
+                except Exception as e:  # a broken sink must not break the request path
+                    status = f"error: {type(e).__name__}"
+                audit.record(db, tenant_id, "system", "plugin.sink", s.name, {"event": event, "status": status})
         return run
 
     def staff(scope: str):
@@ -400,7 +440,8 @@ def create_app(settings: Settings | None = None, http: httpx.Client | None = Non
             toks = set(tokenize(next(d.text for d in docs if d.id == cid)))
             best = max(len(toks & a) / (len(toks | a) or 1) for a in advanced)
             return round(0.15 * best, 4) if fb.get(cid) != "advance" else 0.15
-        ranked = rank(q, docs, boost=boost, limit=body.limit)
+        engine, _ = enabled_plugin(p.tenant_id, body.engine, "matcher")
+        ranked = engine.rank(q, docs, boost=boost, limit=body.limit)
         if body.comp_ceiling is not None:
             for m in ranked:
                 d = next(d for d in docs if d.id == m.id)
@@ -411,7 +452,7 @@ def create_app(settings: Settings | None = None, http: httpx.Client | None = Non
         audit.record(db, p.tenant_id, p.actor, "match.run", pid, {"candidates": len(docs)})
         bg.add_task(emit(p.tenant_id, "match.ready", {"posting_id": pid, "count": len(result),
                                                       "top": [r["candidate_id"] for r in result[:5]]}))
-        return {"posting_id": pid, "engine": "bm25-local", "scored_fields": list(consent.MATCHABLE),
+        return {"posting_id": pid, "engine": engine.name, "scored_fields": list(consent.MATCHABLE),
                 "matches": result}
 
     @app.post("/v1/postings/{pid}/feedback")
@@ -495,6 +536,69 @@ def create_app(settings: Settings | None = None, http: httpx.Client | None = Non
                  "AND created_at<?", now(), p.tenant_id, cutoff)
         audit.record(db, p.tenant_id, p.actor, "retention.run", p.tenant_id, {"erased": n, "days": days})
         return {"erased": n, "retention_days": days}
+
+    # ---------- plugins ----------
+    @app.get("/v1/plugins")
+    def list_plugins(p: Principal = Depends(staff("postings:read"))):
+        out = []
+        for d in registry.describe():
+            on, cfg = plugin_state(p.tenant_id, d["name"])
+            out.append({**d, "enabled": on, "configured": bool(cfg)})
+        return {"plugins": out, "load_errors": registry.errors}
+
+    @app.put("/v1/plugins/{name}")
+    def configure_plugin(name: str, body: PluginConfigIn, p: Principal = Depends(staff("keys"))):
+        if registry.get(name) is None:
+            raise HTTPException(404, "Plugin not found")
+        if len(dumps(body.config)) > 10_000:
+            raise HTTPException(422, "Plugin config too large")
+        db.x("INSERT INTO plugin_config VALUES (?,?,?,?,?) ON CONFLICT(tenant_id, plugin) DO UPDATE SET "
+             "enabled=excluded.enabled, config=excluded.config, updated_at=excluded.updated_at",
+             p.tenant_id, name, int(body.enabled), dumps(body.config), now())
+        audit.record(db, p.tenant_id, p.actor, "plugin.configured", name,
+                     {"enabled": body.enabled, "keys": sorted(body.config)})
+        return {"name": name, "enabled": body.enabled, "configured": bool(body.config)}
+
+    @app.post("/v1/plugins/{name}/import")
+    def import_postings(name: str, p: Principal = Depends(staff("postings:write"))):
+        src, cfg = enabled_plugin(p.tenant_id, name, "source")
+        try:
+            jobs = src.fetch(cfg, app.state.http)
+        except ValueError as e:
+            raise HTTPException(422, str(e))
+        except Exception as e:
+            raise HTTPException(502, f"Source '{name}' failed: {type(e).__name__}")
+        created = skipped = 0
+        for j in jobs:
+            ext = str(j.get("external_id", ""))[:200]
+            if not ext or db.one("SELECT 1 FROM imported WHERE tenant_id=? AND external_id=?", p.tenant_id, ext):
+                skipped += 1
+                continue
+            body = PostingIn(title=j.get("title") or "Untitled", description=j.get("description", ""),
+                             location=j.get("location", ""), remote=bool(j.get("remote")), team=j.get("team", ""))
+            pid, t = new_id("pst"), now()
+            db.x("INSERT INTO postings VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", pid, p.tenant_id, body.title,
+                 body.description, body.location, int(body.remote), body.team, "draft", None, None, t, t)
+            db.x("INSERT INTO imported VALUES (?,?,?)", p.tenant_id, ext, pid)
+            created += 1
+        audit.record(db, p.tenant_id, p.actor, "plugin.import", name, {"created": created, "skipped": skipped})
+        return {"plugin": name, "created": created, "skipped": skipped, "status": "draft"}
+
+    @app.get("/v1/postings/{pid}/export")
+    def export_applications(pid: str, plugin: str = "csv", p: Principal = Depends(staff("candidates:read"))):
+        get_posting(p.tenant_id, pid)
+        exp, _ = enabled_plugin(p.tenant_id, plugin, "export")
+        rows = []
+        for r in db.q("SELECT a.id, a.candidate_id, a.status, a.created_at FROM applications a JOIN candidates c "
+                      "ON c.id=a.candidate_id WHERE a.tenant_id=? AND a.posting_id=? AND c.deleted_at IS NULL "
+                      "ORDER BY a.created_at", p.tenant_id, pid):
+            v = candidate_view(p.tenant_id, r["candidate_id"])["profile"]
+            rows.append({"application_id": r["id"], "candidate_id": r["candidate_id"], "status": r["status"],
+                         "applied_at": r["created_at"], **v})
+        media, data = exp.export(rows)
+        audit.record(db, p.tenant_id, p.actor, "plugin.export", pid, {"plugin": plugin, "rows": len(rows)})
+        return Response(content=data, media_type=media,
+                        headers={"Content-Disposition": f'attachment; filename="{pid}.{plugin}"'})
 
     assert set(ROLES) == {"admin", "recruiter", "auditor", "widget"}
     return app

@@ -1,5 +1,5 @@
-# Copyright (c) 2026 Benjamin Stanley Frohman. All rights reserved.
-# Proprietary and confidential. No use, copying or distribution without written permission.
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Benjamin Stanley Frohman
 """SQLite storage. Every tenant-owned table carries tenant_id and every query filters on it."""
 from __future__ import annotations
 
@@ -34,6 +34,10 @@ CREATE TABLE IF NOT EXISTS audit_log (seq INTEGER PRIMARY KEY AUTOINCREMENT, ten
   actor TEXT NOT NULL, action TEXT NOT NULL, target TEXT NOT NULL, detail TEXT NOT NULL, at REAL NOT NULL,
   prev_hash TEXT NOT NULL, hash TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS widget_config (tenant_id TEXT PRIMARY KEY, config TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS plugin_config (tenant_id TEXT NOT NULL, plugin TEXT NOT NULL, enabled INTEGER NOT NULL,
+  config TEXT NOT NULL, updated_at REAL NOT NULL, PRIMARY KEY (tenant_id, plugin));
+CREATE TABLE IF NOT EXISTS imported (tenant_id TEXT NOT NULL, external_id TEXT NOT NULL, posting_id TEXT NOT NULL,
+  PRIMARY KEY (tenant_id, external_id));
 CREATE INDEX IF NOT EXISTS ix_postings_tenant ON postings(tenant_id, status);
 CREATE INDEX IF NOT EXISTS ix_apps_tenant ON applications(tenant_id, posting_id);
 CREATE INDEX IF NOT EXISTS ix_audit_tenant ON audit_log(tenant_id, seq);
