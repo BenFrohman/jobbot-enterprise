@@ -1,0 +1,15 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata below."
+type: software
+title: "Jobbot Enterprise"
+authors:
+  - family-names: "Frohman"
+    given-names: "Benjamin Stanley"
+    alias: "B.S. Frohman"
+    orcid: "https://orcid.org/0009-0006-7068-3718"
+    email: "frohmanbenjamin@gmail.com"
+    affiliation: "Independent Researcher, Texas, United States"
+version: "0.2.0"
+repository-code: "https://github.com/BenFrohman/jobbot-enterprise"
+license: Apache-2.0
+abstract: "Open-source, self-hosted hiring engine: consent-first candidate intake, explainable matching, signed webhooks, audit log and plugins."
